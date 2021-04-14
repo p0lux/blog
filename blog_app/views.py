@@ -94,11 +94,9 @@ def post_share(request, post_id):
             cd = form.cleaned_data
             post_url = request.build_absolute_uri(post.get_absolute_url())
             subject = f"{cd['name']} recommends you read {post.title}"
-            message = f"Read {post.title} at {post_url}\n\n" \
-                      f"{cd['name']}\'s comments: {cd['comments']}"
+            message = f"Read {post.title} at {post_url}\n\n {cd['name']}\'s comments: {cd['comments']}"
             send_mail(subject, message, 'kylian.p@pm.me', [cd['to']])
             sent = True
-
     else:
         form = EmailPostForm()
     return render(request, 'blog_app/post/share.html', {'post': post,
@@ -114,9 +112,9 @@ def post_search(request):
         form = SearchForm(request.GET)
         if form.is_valid():
             query = form.cleaned_data['query']
-            results = Post.published.annotate(search=SearchVector('title', 'body')).filter(search=query)
-    return render(request,
-                  'blog_app/post/search.html',
-                  {'form': form,
-                   'query': query,
-                   'results': results})
+            search_vector = SearchVector('title', weight='A') + SearchVector('body', weight='B')
+            search_query = SearchQuery(query)
+            results = Post.published.annotate(similarity=TrigramSimilarity('title', query)).filter(
+                similarity__gt=0.1
+            ).order_by('-similarity')
+    return render(request, 'blog_app/post/search.html', {'form': form, 'query': query, 'results': results})
